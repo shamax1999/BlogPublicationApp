@@ -8,18 +8,23 @@ import { redirect } from "next/navigation";
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
+  const name = formData.get("name")?.toString();
+  const phone = formData.get("phone")?.toString();
+  const country = formData.get("country")?.toString();
+
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
-  if (!email || !password) {
+
+  if (!email || !password || !name || !phone || !country) {
     return encodedRedirect(
       "error",
       "/sign-up",
-      "Email and password are required",
+      "All fields are required. Please fill out the form completely.",
     );
   }
 
-  const { error } = await supabase.auth.signUp({
+  const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -27,17 +32,39 @@ export const signUpAction = async (formData: FormData) => {
     },
   });
 
-  if (error) {
-    console.error(error.code + " " + error.message);
-    return encodedRedirect("error", "/sign-up", error.message);
-  } else {
+  if (authError) {
+    console.error(authError.code + " " + authError.message);
+    return encodedRedirect("error", "/sign-up", authError.message);
+  }
+
+
+  const { error: dbError } = await supabase.from("users").insert([
+    {
+      id: authData?.user?.id,
+      name,
+      phone,
+      country,
+      email,
+      created_at: new Date(),
+    },
+  ]);
+
+  if (dbError) {
+    console.error(dbError.message);
     return encodedRedirect(
-      "success",
+      "error",
       "/sign-up",
-      "Thanks for signing up! Please check your email for a verification link.",
+      "User signed up, but failed to save additional data. Please contact support.",
     );
   }
+
+  return encodedRedirect(
+    "success",
+    "/sign-up",
+    "Thanks for signing up! Please check your email for a verification link.",
+  );
 };
+
 
 export const signInAction = async (formData: FormData) => {
   const email = formData.get("email") as string;
